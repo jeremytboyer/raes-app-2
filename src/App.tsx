@@ -15,7 +15,7 @@ const initialDMs = [
   { id: "sara", name: "Sara" },
 ];
 
-export default function SlackCloneUI({ currentUser }) {
+export default function SlackCloneUI({ currentUser }: { currentUser: string }) {
   const [socket, setSocket] = useState<any>(null);
   const [activeTab, setActiveTab] = useState("channel");
   const [activeChat, setActiveChat] = useState("general");
