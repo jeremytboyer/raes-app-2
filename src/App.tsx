@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
 
-const SOCKET_URL = "https://f3nc2l-3000.csb.app";
+const SOCKET_URL = "https://raes-app.onrender.com";
 
 const initialChannels = [
   { id: "general", name: "# general" },
@@ -15,11 +15,12 @@ const initialDMs = [
   { id: "sara", name: "Sara" },
 ];
 
-export default function SlackCloneUI({ currentUser }: { currentUser: string }) {
+export default function SlackCloneUI() {
   const [socket, setSocket] = useState<any>(null);
   const [activeTab, setActiveTab] = useState("channel");
   const [activeChat, setActiveChat] = useState("general");
   const [input, setInput] = useState("");
+  const [currentUser] = useState("Jeremy");
 
   const [messages, setMessages] = useState<Record<string, any[]>>({
     general: [],
