@@ -1,189 +1,109 @@
 import { useEffect, useState } from "react";
-import { io } from "socket.io-client";
+import SlackCloneUI from "./SlackCloneUI";
 
-const SOCKET_URL = "https://raes-app.onrender.com";
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut,
+  User,
+} from "firebase/auth";
 
-const initialChannels = [
-  { id: "general", name: "# general" },
-  { id: "random", name: "# random" },
-  { id: "build", name: "# build-log" },
-];
+import { auth } from "./firebase";
 
-const initialDMs = [
-  { id: "alice", name: "Alice" },
-  { id: "bob", name: "Bob" },
-  { id: "sara", name: "Sara" },
-];
+export default function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLogin, setIsLogin] = useState(true);
+  const [loading, setLoading] = useState(true);
 
-export default function SlackCloneUI() {
-  const [socket, setSocket] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState("channel");
-  const [activeChat, setActiveChat] = useState("general");
-  const [input, setInput] = useState("");
-  const [currentUser] = useState("Jeremy");
-
-  const [messages, setMessages] = useState<Record<string, any[]>>({
-    general: [],
-    random: [],
-    build: [],
-    alice: [],
-    bob: [],
-    sara: [],
-  });
-
-  const list = activeTab === "channel" ? initialChannels : initialDMs;
-
-  // 🔌 SOCKET INIT (FIXED)
   useEffect(() => {
-    const newSocket = io(SOCKET_URL, {
-      transports: ["websocket", "polling"],
+    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+      setLoading(false);
     });
 
-    newSocket.on("connect", () => {
-      console.log("✅ CONNECTED:", newSocket.id);
-    });
-
-    newSocket.on("connect_error", (err) => {
-      console.error("❌ CONNECTION ERROR:", err.message);
-    });
-
-    setSocket(newSocket);
-
-    return () => {
-      newSocket.disconnect();
-    };
+    return () => unsub();
   }, []);
 
-  // 📡 JOIN ROOM + LOAD HISTORY
-  useEffect(() => {
-    if (!socket) return;
-
-    socket.emit("join", { room: activeChat });
-
-    socket.emit("getMessages", { room: activeChat }, (msgs: any[]) => {
-      setMessages((prev) => ({
-        ...prev,
-        [activeChat]: msgs || [],
-      }));
-    });
-  }, [socket, activeChat]);
-
-  // 📥 LISTEN FOR MESSAGES
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleMessage = ({ room, msg }: any) => {
-      setMessages((prev) => ({
-        ...prev,
-        [room]: [...(prev[room] || []), msg],
-      }));
-    };
-
-    socket.on("message", handleMessage);
-
-    return () => {
-      socket.off("message", handleMessage);
-    };
-  }, [socket]);
-
-  // ✉️ SEND MESSAGE
-  const sendMessage = () => {
-    if (!socket || !input.trim()) return;
-
-    socket.emit("message", {
-      room: activeChat,
-      sender: currentUser,
-      text: input,
-    });
-
-    setInput("");
+  const login = async () => {
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (e: any) {
+      alert(e.message);
+    }
   };
 
-  return (
-    <div className="h-screen flex flex-col sm:flex-row bg-gray-100">
-      {/* Sidebar */}
-      <aside className="w-full sm:w-64 bg-gray-900 text-white flex flex-col">
-        <div className="p-3 font-bold text-lg border-b border-gray-700">
-          Rae's App
-        </div>
+  const signup = async () => {
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
 
-        <div className="flex">
-          <button
-            onClick={() => setActiveTab("channel")}
-            className={`flex-1 p-2 text-sm ${
-              activeTab === "channel" ? "bg-gray-800" : ""
-            }`}
-          >
-            Channels
-          </button>
+  const logout = () => signOut(auth);
 
-          <button
-            onClick={() => setActiveTab("dm")}
-            className={`flex-1 p-2 text-sm ${
-              activeTab === "dm" ? "bg-gray-800" : ""
-            }`}
-          >
-            DMs
-          </button>
-        </div>
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        Loading...
+      </div>
+    );
+  }
 
-        <div className="flex-1 overflow-y-auto">
-          {list.map((item) => (
-            <div
-              key={item.id}
-              onClick={() => setActiveChat(item.id)}
-              className={`px-3 py-2 cursor-pointer hover:bg-gray-800 ${
-                activeChat === item.id ? "bg-gray-800" : ""
-              }`}
-            >
-              {item.name}
-            </div>
-          ))}
-        </div>
-      </aside>
+  if (!user) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-100">
+        <div className="bg-white p-6 rounded shadow w-80">
+          <h2 className="text-xl font-bold mb-4">
+            {isLogin ? "Login" : "Sign Up"}
+          </h2>
 
-      {/* Chat */}
-      <main className="flex-1 flex flex-col">
-        <div className="h-12 bg-white border-b flex items-center px-4 font-medium">
-          {activeChat} —{" "}
-          <span className="ml-2 text-sm text-gray-500">{currentUser}</span>
-        </div>
-
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-2">
-          {(messages[activeChat] || []).map((msg, idx) => (
-            <div
-              key={idx}
-              className={`max-w-md px-3 py-2 rounded-lg text-sm ${
-                msg.sender === currentUser
-                  ? "ml-auto bg-blue-500 text-white"
-                  : "bg-white border"
-              }`}
-            >
-              <div className="text-xs opacity-60 mb-1">{msg.sender}</div>
-              {msg.text}
-            </div>
-          ))}
-        </div>
-
-        {/* Input */}
-        <div className="p-3 border-t bg-white flex gap-2">
           <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-            className="flex-1 border rounded px-3 py-2 text-sm"
-            placeholder={`Message #${activeChat}`}
+            className="w-full border p-2 mb-2 rounded"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+
+          <input
+            className="w-full border p-2 mb-3 rounded"
+            placeholder="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
           />
 
           <button
-            onClick={sendMessage}
-            className="bg-blue-500 text-white px-4 rounded"
+            onClick={isLogin ? login : signup}
+            className="w-full bg-blue-500 text-white py-2 rounded"
           >
-            Send
+            {isLogin ? "Login" : "Create Account"}
+          </button>
+
+          <button
+            onClick={() => setIsLogin(!isLogin)}
+            className="w-full mt-3 text-sm text-blue-500"
+          >
+            Switch mode
           </button>
         </div>
-      </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative h-screen">
+      <button
+        onClick={logout}
+        className="absolute top-2 right-2 bg-white px-3 py-1 rounded shadow"
+      >
+        Logout
+      </button>
+
+      <SlackCloneUI currentUser={user.email || "Unknown"} uid={user.uid} />
     </div>
   );
 }

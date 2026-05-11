@@ -1,16 +1,18 @@
+require("dotenv").config();
+
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
+const mongoose = require("mongoose");
 const cors = require("cors");
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
-// Create HTTP server
 const server = http.createServer(app);
 
-// Attach Socket.io
 const io = new Server(server, {
   cors: {
     origin: "*",
@@ -18,66 +20,128 @@ const io = new Server(server, {
   },
 });
 
-// Simple in-memory message store
-const messages = {};
+//
+// ✅ MONGODB CONNECT
+//
 
-/*
-  messages structure:
-  {
-    general: [{ sender, text, time }],
-    random: [...],
-    alice: [...]
-  }
-*/
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => {
+    console.log("✅ MongoDB connected");
+    console.log("DB:", mongoose.connection.name);
+  })
+  .catch((err) => {
+    console.error("❌ Mongo connection error");
+    console.error(err);
+  });
+
+//
+// ✅ MESSAGE MODEL
+//
+
+const MessageSchema = new mongoose.Schema({
+  room: String,
+  sender: String,
+  uid: String,
+  text: String,
+  time: Number,
+});
+
+const Message = mongoose.model("Message", MessageSchema);
+
+//
+// ✅ SOCKET.IO
+//
 
 io.on("connection", (socket) => {
-  console.log("User connected:", socket.id);
+  console.log("✅ User connected:", socket.id);
 
-  // Join a room (channel or DM)
+  //
+  // JOIN ROOM
+  //
   socket.on("join", ({ room }) => {
     socket.join(room);
-    console.log(`Socket ${socket.id} joined ${room}`);
+
+    console.log(`➡️ ${socket.id} joined ${room}`);
   });
 
-  // Send message to a room
-  socket.on("message", ({ room, sender, text }) => {
-    const msg = {
-      sender,
-      text,
-      time: Date.now(),
-    };
+  //
+  // SEND MESSAGE
+  //
+  socket.on("message", async ({ room, sender, uid, text }) => {
+    try {
+      console.log("📤 Incoming message:", text);
 
-    if (!messages[room]) {
-      messages[room] = [];
+      const msg = {
+        room,
+        sender,
+        uid,
+        text,
+        time: Date.now(),
+      };
+
+      //
+      // ✅ SAVE TO MONGO
+      //
+      const savedMessage = await Message.create(msg);
+
+      console.log("✅ Saved to Mongo:", savedMessage._id);
+
+      //
+      // ✅ EMIT TO ROOM
+      //
+      io.to(room).emit("message", {
+        room,
+        msg: savedMessage,
+      });
+    } catch (err) {
+      console.error("❌ MESSAGE SAVE ERROR");
+      console.error(err);
     }
-
-    messages[room].push(msg);
-
-    // broadcast to everyone in room
-    io.to(room).emit("message", {
-      room,
-      msg,
-    });
   });
 
-  // Get message history for a room
-  socket.on("getMessages", ({ room }, cb) => {
-    cb(messages[room] || []);
+  //
+  // LOAD MESSAGE HISTORY
+  //
+  socket.on("getMessages", async ({ room }, cb) => {
+    try {
+      console.log("📜 Loading history for:", room);
+
+      const msgs = await Message.find({ room }).sort({ time: 1 });
+
+      console.log(`✅ Loaded ${msgs.length} messages`);
+
+      cb(msgs);
+    } catch (err) {
+      console.error("❌ LOAD MESSAGES ERROR");
+      console.error(err);
+
+      cb([]);
+    }
   });
 
+  //
+  // DISCONNECT
+  //
   socket.on("disconnect", () => {
-    console.log("User disconnected:", socket.id);
+    console.log("❌ User disconnected:", socket.id);
   });
 });
 
-// Basic test route
+//
+// TEST ROUTE
+//
+
 app.get("/", (req, res) => {
-  res.send("Slack Clone server is running 🚀");
+  res.send("🚀 Server running");
 });
 
-// Start server
-const PORT = process.env.PORT || 3000;
+//
+// START SERVER
+//
 
-server.listen(PORT, "0.0.0.0", () => {
-  console.log("Server running on port", PORT);
+const PORT = process.env.PORT || 3001;
+
+server.listen(PORT, () => {
+  console.log(`🚀 Server listening on ${PORT}`);
 });
