@@ -11,8 +11,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+//
+// HTTP SERVER
+//
 const server = http.createServer(app);
 
+//
+// SOCKET.IO
+//
 const io = new Server(server, {
   cors: {
     origin: "*",
@@ -21,9 +27,8 @@ const io = new Server(server, {
 });
 
 //
-// ✅ MONGODB CONNECT
+// MONGODB CONNECT
 //
-
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
@@ -36,19 +41,22 @@ mongoose
   });
 
 //
-// ✅ MESSAGE MODEL
+// MESSAGE MODEL
 //
-
 const MessageSchema = new mongoose.Schema({
   room: String,
   sender: String,
   uid: String,
+  avatar: String,
   text: String,
   time: Number,
 });
 
 const Message = mongoose.model("Message", MessageSchema);
 
+//
+// USER MODEL
+//
 const UserSchema = new mongoose.Schema({
   uid: String,
   email: String,
@@ -60,9 +68,8 @@ const UserSchema = new mongoose.Schema({
 const User = mongoose.model("User", UserSchema);
 
 //
-// ✅ SOCKET.IO
+// SOCKET CONNECTION
 //
-
 io.on("connection", (socket) => {
   console.log("✅ User connected:", socket.id);
 
@@ -82,36 +89,47 @@ io.on("connection", (socket) => {
     try {
       console.log("📤 Incoming message:", text);
 
+      //
+      // FIND USER PROFILE
+      //
+      const user = await User.findOne({ uid });
+
+      //
+      // BUILD MESSAGE
+      //
       const msg = {
         room,
-        sender,
+        sender: user?.displayName || sender,
         uid,
+        avatar:
+          user?.avatar ||
+          `https://api.dicebear.com/7.x/initials/svg?seed=${sender}`,
         text,
         time: Date.now(),
       };
 
       //
-      // ✅ SAVE TO MONGO
+      // SAVE MESSAGE
       //
       const savedMessage = await Message.create(msg);
 
-      console.log("✅ Saved to Mongo:", savedMessage._id);
+      console.log("✅ Saved to Mongo");
 
       //
-      // ✅ EMIT TO ROOM
+      // EMIT TO ROOM
       //
       io.to(room).emit("message", {
         room,
         msg: savedMessage,
       });
     } catch (err) {
-      console.error("❌ MESSAGE SAVE ERROR");
+      console.error("❌ MESSAGE ERROR");
       console.error(err);
     }
   });
 
   //
-  // LOAD MESSAGE HISTORY
+  // GET MESSAGE HISTORY
   //
   socket.on("getMessages", async ({ room }, cb) => {
     try {
@@ -141,7 +159,6 @@ io.on("connection", (socket) => {
 //
 // TEST ROUTE
 //
-
 app.get("/", (req, res) => {
   res.send("🚀 Server running");
 });
@@ -149,35 +166,54 @@ app.get("/", (req, res) => {
 //
 // CREATE / GET USER
 //
-
 app.post("/api/users", async (req, res) => {
-  console.log("🔥 /api/users HIT");
-  console.log(req.body);
   try {
-    const { uid, email } = req.body;
+    console.log("🔥 /api/users HIT");
+    console.log(req.body);
+
+    const { uid, email, username } = req.body;
 
     //
-    // CHECK EXISTING
+    // CHECK EXISTING USER
     //
     let user = await User.findOne({ uid });
 
     //
-    // CREATE IF MISSING
+    // CREATE USER IF MISSING
     //
     if (!user) {
+      //
+      // OPTIONAL DUPLICATE USERNAME CHECK
+      //
+      if (username) {
+        const existingUsername = await User.findOne({
+          displayName: username,
+        });
+
+        if (existingUsername) {
+          return res.status(400).json({
+            error: "Username already taken",
+          });
+        }
+      }
+
+      //
+      // CREATE USER
+      //
       user = await User.create({
         uid,
         email,
-        displayName: email.split("@")[0],
+        displayName: username || email.split("@")[0],
         avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${email}`,
         createdAt: Date.now(),
       });
 
-      console.log("✅ Created user:", email);
+      console.log("✅ Created user:", user.displayName);
     }
 
     res.json(user);
   } catch (err) {
+    console.error("❌ USER ROUTE ERROR");
     console.error(err);
 
     res.status(500).json({
@@ -189,7 +225,6 @@ app.post("/api/users", async (req, res) => {
 //
 // START SERVER
 //
-
 const PORT = process.env.PORT || 3001;
 
 server.listen(PORT, () => {

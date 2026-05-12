@@ -7,6 +7,7 @@ type Msg = {
   sender: string;
   uid: string;
   text: string;
+  avatar: string;
 };
 
 export default function SlackCloneUI({
@@ -120,10 +121,30 @@ export default function SlackCloneUI({
         <div className="border-b p-3 font-bold">{activeChat}</div>
 
         <div className="flex-1 p-3 overflow-y-auto space-y-2">
-          {(messages[activeChat] || []).map((m, i) => (
-            <div key={i} className="p-2 bg-gray-100 rounded">
-              <div className="text-xs text-gray-500">{m.sender}</div>
-              <div>{m.text}</div>
+          {(messages[activeChat] || []).map((msg, idx) => (
+            <div
+              key={idx}
+              className={`flex gap-2 mb-3 ${
+                msg.uid === uid ? "justify-end" : "justify-start"
+              }`}
+            >
+              {msg.uid !== uid && (
+                <img
+                  src={msg.avatar}
+                  alt=""
+                  className="w-10 h-10 rounded-full"
+                />
+              )}
+
+              <div
+                className={`max-w-md px-3 py-2 rounded-lg text-sm ${
+                  msg.uid === uid ? "bg-blue-500 text-white" : "bg-white border"
+                }`}
+              >
+                <div className="font-semibold text-xs mb-1">{msg.sender}</div>
+
+                {msg.text}
+              </div>
             </div>
           ))}
         </div>
