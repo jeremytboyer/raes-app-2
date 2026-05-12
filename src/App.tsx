@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import SlackCloneUI from "./SlackCloneUI";
+import axios from "axios";
 
 import {
   signInWithEmailAndPassword,
@@ -19,8 +20,22 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
+
+      if (firebaseUser) {
+        try {
+          await axios.post("https://raes-app.onrender.com/api/users", {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+          });
+
+          console.log("✅ User synced");
+        } catch (err) {
+          console.error("❌ User sync failed", err);
+        }
+      }
+
       setLoading(false);
     });
 

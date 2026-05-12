@@ -49,6 +49,16 @@ const MessageSchema = new mongoose.Schema({
 
 const Message = mongoose.model("Message", MessageSchema);
 
+const UserSchema = new mongoose.Schema({
+  uid: String,
+  email: String,
+  displayName: String,
+  avatar: String,
+  createdAt: Number,
+});
+
+const User = mongoose.model("User", UserSchema);
+
 //
 // ✅ SOCKET.IO
 //
@@ -134,6 +144,44 @@ io.on("connection", (socket) => {
 
 app.get("/", (req, res) => {
   res.send("🚀 Server running");
+});
+
+//
+// CREATE / GET USER
+//
+
+app.post("/api/users", async (req, res) => {
+  try {
+    const { uid, email } = req.body;
+
+    //
+    // CHECK EXISTING
+    //
+    let user = await User.findOne({ uid });
+
+    //
+    // CREATE IF MISSING
+    //
+    if (!user) {
+      user = await User.create({
+        uid,
+        email,
+        displayName: email.split("@")[0],
+        avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${email}`,
+        createdAt: Date.now(),
+      });
+
+      console.log("✅ Created user:", email);
+    }
+
+    res.json(user);
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).json({
+      error: "Failed to create user",
+    });
+  }
 });
 
 //
