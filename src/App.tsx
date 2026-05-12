@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import SlackCloneUI from "./SlackCloneUI";
-import axios from "axios";
 
 import {
   signInWithEmailAndPassword,
@@ -25,9 +24,17 @@ export default function App() {
 
       if (firebaseUser) {
         try {
-          await axios.post("https://raes-app.onrender.com/api/users", {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
+          console.log("📤 Sending user to backend");
+
+          await fetch("https://raes-app.onrender.com/api/users", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+            }),
           });
 
           console.log("✅ User synced");

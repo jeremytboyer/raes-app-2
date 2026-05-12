@@ -151,6 +151,8 @@ app.get("/", (req, res) => {
 //
 
 app.post("/api/users", async (req, res) => {
+  console.log("🔥 /api/users HIT");
+  console.log(req.body);
   try {
     const { uid, email } = req.body;
 
