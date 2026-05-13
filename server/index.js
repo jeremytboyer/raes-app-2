@@ -94,8 +94,6 @@ io.on("connection", (socket) => {
       //
       const user = await User.findOne({ uid });
 
-      console.log("MESSAGE UID:", uid);
-      console.log("FOUND USER:", user);
       //
       // BUILD MESSAGE
       //
