@@ -204,7 +204,9 @@ app.post("/api/users", async (req, res) => {
         uid,
         email,
         displayName: username || email.split("@")[0],
-        avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${email}`,
+        avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${
+          username || email.split("@")[0]
+        }`,
         createdAt: Date.now(),
       });
 
