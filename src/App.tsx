@@ -22,28 +22,6 @@ export default function App() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
-
-      if (firebaseUser) {
-        try {
-          console.log("📤 Sending user to backend");
-
-          await fetch("https://raes-app.onrender.com/api/users", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-            }),
-          });
-
-          console.log("✅ User synced");
-        } catch (err) {
-          console.error("❌ User sync failed", err);
-        }
-      }
-
       setLoading(false);
     });
 
