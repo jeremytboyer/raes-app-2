@@ -13,6 +13,7 @@ import { auth } from "./firebase";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLogin, setIsLogin] = useState(true);
@@ -57,11 +58,28 @@ export default function App() {
     }
   };
 
-  const signup = async () => {
+  const signup = async (e: React.FormEvent) => {
+    e.preventDefault();
+
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
-    } catch (e: any) {
-      alert(e.message);
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+
+      await fetch("https://raes-app.onrender.com/api/users", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          uid: cred.user.uid,
+          email: cred.user.email,
+          username,
+        }),
+      });
+
+      console.log("✅ Account created");
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message);
     }
   };
 
@@ -89,6 +107,15 @@ export default function App() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
+          {!isLogin && (
+            <input
+              type="text"
+              placeholder="Username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full border px-3 py-2 mb-3 rounded"
+            />
+          )}
 
           <input
             className="w-full border p-2 mb-3 rounded"
