@@ -30,6 +30,9 @@ export default function SlackCloneUI({
   useEffect(() => {
     const s = io(SOCKET_URL, {
       transports: ["websocket", "polling"],
+      auth: {
+        uid,
+      },
     });
 
     // ✅ CONNECTED

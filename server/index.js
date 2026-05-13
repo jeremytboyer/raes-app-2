@@ -11,14 +11,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-//
-// HTTP SERVER
-//
 const server = http.createServer(app);
 
-//
-// SOCKET.IO
-//
 const io = new Server(server, {
   cors: {
     origin: "*",
@@ -26,9 +20,6 @@ const io = new Server(server, {
   },
 });
 
-//
-// MONGODB CONNECT
-//
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
@@ -40,9 +31,6 @@ mongoose
     console.error(err);
   });
 
-//
-// MESSAGE MODEL
-//
 const MessageSchema = new mongoose.Schema({
   room: String,
   sender: String,
@@ -54,118 +42,43 @@ const MessageSchema = new mongoose.Schema({
 
 const Message = mongoose.model("Message", MessageSchema);
 
-//
-// USER MODEL
-//
 const UserSchema = new mongoose.Schema({
   uid: String,
   email: String,
   displayName: String,
   avatar: String,
+  online: {
+    type: Boolean,
+    default: false,
+  },
+  lastSeen: Number,
   createdAt: Number,
 });
 
 const User = mongoose.model("User", UserSchema);
 
-//
-// SOCKET CONNECTION
-//
-io.on("connection", (socket) => {
-  console.log("✅ User connected:", socket.id);
-
-  //
-  // JOIN ROOM
-  //
-  socket.on("join", ({ room }) => {
-    socket.join(room);
-
-    console.log(`➡️ ${socket.id} joined ${room}`);
-  });
-
-  //
-  // SEND MESSAGE
-  //
-  socket.on("message", async ({ room, sender, uid, text }) => {
-    try {
-      console.log("📤 Incoming message:", text);
-
-      //
-      // FIND USER PROFILE
-      //
-      const user = await User.findOne({ uid });
-
-      //
-      // BUILD MESSAGE
-      //
-      const msg = {
-        room,
-        sender: user?.displayName || sender,
-        uid,
-        avatar:
-          user?.avatar ||
-          `https://api.dicebear.com/7.x/initials/svg?seed=${sender}`,
-        text,
-        time: Date.now(),
-      };
-
-      //
-      // SAVE MESSAGE
-      //
-      const savedMessage = await Message.create(msg);
-
-      console.log("✅ Saved to Mongo");
-
-      //
-      // EMIT TO ROOM
-      //
-      io.to(room).emit("message", {
-        room,
-        msg: savedMessage,
-      });
-    } catch (err) {
-      console.error("❌ MESSAGE ERROR");
-      console.error(err);
-    }
-  });
-
-  //
-  // GET MESSAGE HISTORY
-  //
-  socket.on("getMessages", async ({ room }, cb) => {
-    try {
-      console.log("📜 Loading history for:", room);
-
-      const msgs = await Message.find({ room }).sort({ time: 1 });
-
-      console.log(`✅ Loaded ${msgs.length} messages`);
-
-      cb(msgs);
-    } catch (err) {
-      console.error("❌ LOAD MESSAGES ERROR");
-      console.error(err);
-
-      cb([]);
-    }
-  });
-
-  //
-  // DISCONNECT
-  //
-  socket.on("disconnect", () => {
-    console.log("❌ User disconnected:", socket.id);
-  });
-});
-
-//
-// TEST ROUTE
-//
 app.get("/", (req, res) => {
   res.send("🚀 Server running");
 });
 
-//
-// CREATE / GET USER
-//
+app.get("/api/users", async (req, res) => {
+  try {
+    const users = await User.find().sort({
+      online: -1,
+      displayName: 1,
+    });
+
+    res.json(users);
+  } catch (err) {
+    console.error("❌ GET USERS ERROR");
+    console.error(err);
+
+    res.status(500).json({
+      error: "Failed to fetch users",
+    });
+  }
+});
+
 app.post("/api/users", async (req, res) => {
   try {
     console.log("🔥 /api/users HIT");
@@ -173,18 +86,9 @@ app.post("/api/users", async (req, res) => {
 
     const { uid, email, username } = req.body;
 
-    //
-    // CHECK EXISTING USER
-    //
     let user = await User.findOne({ uid });
 
-    //
-    // CREATE USER IF MISSING
-    //
     if (!user) {
-      //
-      // OPTIONAL DUPLICATE USERNAME CHECK
-      //
       if (username) {
         const existingUsername = await User.findOne({
           displayName: username,
@@ -197,9 +101,6 @@ app.post("/api/users", async (req, res) => {
         }
       }
 
-      //
-      // CREATE USER
-      //
       user = await User.create({
         uid,
         email,
@@ -207,6 +108,8 @@ app.post("/api/users", async (req, res) => {
         avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${
           username || email.split("@")[0]
         }`,
+        online: false,
+        lastSeen: Date.now(),
         createdAt: Date.now(),
       });
 
@@ -224,9 +127,93 @@ app.post("/api/users", async (req, res) => {
   }
 });
 
-//
-// START SERVER
-//
+io.on("connection", (socket) => {
+  console.log("✅ User connected:", socket.id);
+
+  const uid = socket.handshake.auth?.uid;
+
+  if (uid) {
+    User.findOneAndUpdate(
+      { uid },
+      {
+        online: true,
+        lastSeen: Date.now(),
+      }
+    ).then(() => {
+      console.log("🟢 User online:", uid);
+    });
+  }
+
+  socket.on("join", ({ room }) => {
+    socket.join(room);
+    console.log(`➡️ ${socket.id} joined ${room}`);
+  });
+
+  socket.on("message", async ({ room, sender, uid, text }) => {
+    try {
+      console.log("📤 Incoming message:", text);
+
+      const user = await User.findOne({ uid });
+
+      const msg = {
+        room,
+        sender: user?.displayName || sender,
+        uid,
+        avatar:
+          user?.avatar ||
+          `https://api.dicebear.com/7.x/initials/svg?seed=${sender}`,
+        text,
+        time: Date.now(),
+      };
+
+      const savedMessage = await Message.create(msg);
+
+      console.log("✅ Saved to Mongo");
+
+      io.to(room).emit("message", {
+        room,
+        msg: savedMessage,
+      });
+    } catch (err) {
+      console.error("❌ MESSAGE ERROR");
+      console.error(err);
+    }
+  });
+
+  socket.on("getMessages", async ({ room }, cb) => {
+    try {
+      console.log("📜 Loading history for:", room);
+
+      const msgs = await Message.find({ room }).sort({ time: 1 });
+
+      console.log(`✅ Loaded ${msgs.length} messages`);
+
+      cb(msgs);
+    } catch (err) {
+      console.error("❌ LOAD MESSAGES ERROR");
+      console.error(err);
+
+      cb([]);
+    }
+  });
+
+  socket.on("disconnect", async () => {
+    console.log("❌ User disconnected:", socket.id);
+
+    if (uid) {
+      await User.findOneAndUpdate(
+        { uid },
+        {
+          online: false,
+          lastSeen: Date.now(),
+        }
+      );
+
+      console.log("⚪ User offline:", uid);
+    }
+  });
+});
+
 const PORT = process.env.PORT || 3001;
 
 server.listen(PORT, () => {
