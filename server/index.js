@@ -144,6 +144,21 @@ io.on("connection", (socket) => {
     });
   }
 
+  socket.on("typing", ({ room, sender, uid }) => {
+    socket.to(room).emit("typing", {
+      room,
+      sender,
+      uid,
+    });
+  });
+
+  socket.on("stopTyping", ({ room, uid }) => {
+    socket.to(room).emit("stopTyping", {
+      room,
+      uid,
+    });
+  });
+
   socket.on("join", ({ room }) => {
     socket.join(room);
     console.log(`➡️ ${socket.id} joined ${room}`);
