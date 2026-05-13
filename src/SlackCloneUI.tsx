@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 
 const SOCKET_URL = "https://raes-app.onrender.com";
@@ -34,7 +34,7 @@ export default function SlackCloneUI({
   const [input, setInput] = useState("");
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [typingUser, setTypingUser] = useState<string | null>(null);
-  const [typingTimeout, setTypingTimeout] = useState<number | null>(null);
+  const typingTimeoutRef = useRef<number | null>(null);
 
   const [messages, setMessages] = useState<Record<string, Msg[]>>({
     general: [],
@@ -157,6 +157,29 @@ export default function SlackCloneUI({
     };
   }, [socket, activeChat, uid]);
 
+  const handleTyping = (value: string) => {
+    setInput(value);
+
+    if (!socket) return;
+
+    socket.emit("typing", {
+      room: activeChat,
+      sender: users.find((u) => u.uid === uid)?.displayName || currentUser,
+      uid,
+    });
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = window.setTimeout(() => {
+      socket.emit("stopTyping", {
+        room: activeChat,
+        uid,
+      });
+    }, 1000);
+  };
+
   return (
     <div className="h-screen flex flex-col sm:flex-row bg-gray-100">
       {/* Sidebar */}
@@ -267,36 +290,10 @@ export default function SlackCloneUI({
           <input
             className="flex-1 border p-2 rounded"
             value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-
-              if (!socket) return;
-
-              socket.emit("typing", {
-                room: activeChat,
-                sender: currentUser,
-                uid,
-              });
-
-              if (typingTimeout) {
-                clearTimeout(typingTimeout);
-              }
-
-              const timeout = window.setTimeout(() => {
-                socket.emit("stopTyping", {
-                  room: activeChat,
-                  uid,
-                });
-              }, 1000);
-
-              setTypingTimeout(timeout);
-            }}
+            onChange={(e) => handleTyping(e.target.value)}
+            onInput={(e) => handleTyping((e.target as HTMLInputElement).value)}
             onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-            placeholder={
-              activeChat.startsWith("dm_")
-                ? "Send a direct message"
-                : `Message #${activeChat}`
-            }
+            placeholder={`Message #${activeChat}`}
           />
 
           <button
