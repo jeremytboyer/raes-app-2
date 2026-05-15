@@ -8,6 +8,7 @@ type Msg = {
   uid: string;
   avatar?: string;
   text: string;
+  time?: number;
 };
 
 type UserProfile = {
@@ -20,6 +21,29 @@ type UserProfile = {
 
 const getDmRoom = (uid1: string, uid2: string) => {
   return [uid1, uid2].sort().join("_");
+};
+
+const formatTime = (time?: number) => {
+  if (!time) return "";
+
+  const date = new Date(time);
+  const now = new Date();
+
+  const isToday = date.toDateString() === now.toDateString();
+
+  if (isToday) {
+    return date.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+
+  return date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 };
 
 export default function SlackCloneUI({
@@ -35,6 +59,7 @@ export default function SlackCloneUI({
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [typingUser, setTypingUser] = useState<string | null>(null);
   const typingTimeoutRef = useRef<number | null>(null);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
 
   const [messages, setMessages] = useState<Record<string, Msg[]>>({
     general: [],
@@ -106,6 +131,13 @@ export default function SlackCloneUI({
         ...prev,
         [room]: [...(prev[room] || []), msg],
       }));
+
+      if (room !== activeChat && msg.uid !== uid) {
+        setUnreadCounts((prev) => ({
+          ...prev,
+          [room]: (prev[room] || 0) + 1,
+        }));
+      }
     };
 
     socket.on("message", handler);
@@ -113,7 +145,7 @@ export default function SlackCloneUI({
     return () => {
       socket.off("message", handler);
     };
-  }, [socket]);
+  }, [socket, activeChat, uid]);
 
   const sendMessage = () => {
     if (!socket || !input.trim()) return;
@@ -192,12 +224,24 @@ export default function SlackCloneUI({
           {channels.map((channel) => (
             <button
               key={channel}
-              onClick={() => setActiveChat(channel)}
-              className={`w-full text-left p-2 rounded text-sm ${
+              onClick={() => {
+                setActiveChat(channel);
+                setUnreadCounts((prev) => ({
+                  ...prev,
+                  [channel]: 0,
+                }));
+              }}
+              className={`w-full flex items-center justify-between text-left p-2 rounded text-sm ${
                 activeChat === channel ? "bg-gray-700" : "hover:bg-gray-800"
               }`}
             >
-              # {channel}
+              <span># {channel}</span>
+
+              {unreadCounts[channel] > 0 && (
+                <span className="ml-auto bg-red-500 text-white text-xs rounded-full px-2">
+                  {unreadCounts[channel]}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -206,32 +250,48 @@ export default function SlackCloneUI({
           <h2 className="text-xs uppercase text-gray-400 mb-2">Online Users</h2>
 
           <div className="space-y-1">
-            {users.map((user) => (
-              <div
-                key={user.uid}
-                onClick={() => {
-                  if (user.uid === uid) return;
+            {users.map((user) => {
+              const dmRoom = `dm_${getDmRoom(uid, user.uid)}`;
 
-                  const dmRoom = `dm_${getDmRoom(uid, user.uid)}`;
-                  setActiveChat(dmRoom);
-                }}
-                className="flex items-center gap-2 p-2 rounded hover:bg-gray-800 cursor-pointer"
-              >
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    user.online ? "bg-green-400" : "bg-gray-500"
-                  }`}
-                />
+              return (
+                <div
+                  key={user.uid}
+                  onClick={() => {
+                    if (user.uid === uid) return;
 
-                <img
-                  src={user.avatar}
-                  alt={user.displayName}
-                  className="w-6 h-6 rounded-full bg-white"
-                />
+                    setActiveChat(dmRoom);
 
-                <span className="text-sm truncate">{user.displayName}</span>
-              </div>
-            ))}
+                    setUnreadCounts((prev) => ({
+                      ...prev,
+                      [dmRoom]: 0,
+                    }));
+                  }}
+                  className="flex items-center gap-2 p-2 rounded hover:bg-gray-800 cursor-pointer"
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      user.online ? "bg-green-400" : "bg-gray-500"
+                    }`}
+                  />
+
+                  <img
+                    src={user.avatar}
+                    alt={user.displayName}
+                    className="w-6 h-6 rounded-full bg-white"
+                  />
+
+                  <span className="text-sm truncate flex-1">
+                    {user.displayName}
+                  </span>
+
+                  {unreadCounts[dmRoom] > 0 && (
+                    <span className="bg-red-500 text-white text-xs rounded-full px-2">
+                      {unreadCounts[dmRoom]}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </aside>
@@ -264,7 +324,17 @@ export default function SlackCloneUI({
                   msg.uid === uid ? "bg-blue-500 text-white" : "bg-white border"
                 }`}
               >
-                <div className="font-semibold text-xs mb-1">{msg.sender}</div>
+                <div className="flex items-center gap-2 text-xs mb-1">
+                  <span className="font-semibold">{msg.sender}</span>
+
+                  <span
+                    className={
+                      msg.uid === uid ? "text-blue-100" : "text-gray-400"
+                    }
+                  >
+                    {formatTime(msg.time)}
+                  </span>
+                </div>
 
                 <div>{msg.text}</div>
               </div>
