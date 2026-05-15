@@ -60,6 +60,7 @@ export default function SlackCloneUI({
   const [typingUser, setTypingUser] = useState<string | null>(null);
   const typingTimeoutRef = useRef<number | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [recentDms, setRecentDms] = useState<string[]>([]);
 
   const [messages, setMessages] = useState<Record<string, Msg[]>>({
     general: [],
@@ -131,6 +132,10 @@ export default function SlackCloneUI({
         ...prev,
         [room]: [...(prev[room] || []), msg],
       }));
+
+      if (room.startsWith("dm_")) {
+        setRecentDms((prev) => [room, ...prev.filter((r) => r !== room)]);
+      }
 
       if (room !== activeChat && msg.uid !== uid) {
         setUnreadCounts((prev) => ({
@@ -247,26 +252,35 @@ export default function SlackCloneUI({
         </div>
 
         <div className="mt-6">
-          <h2 className="text-xs uppercase text-gray-400 mb-2">Online Users</h2>
+          <h2 className="text-xs uppercase text-gray-400 mb-2">
+            Direct Messages
+          </h2>
 
           <div className="space-y-1">
-            {users.map((user) => {
-              const dmRoom = `dm_${getDmRoom(uid, user.uid)}`;
+            {recentDms.map((room) => {
+              const otherUid = room
+                .replace("dm_", "")
+                .split("_")
+                .find((id) => id !== uid);
+
+              const user = users.find((u) => u.uid === otherUid);
+
+              if (!user) return null;
 
               return (
-                <div
-                  key={user.uid}
+                <button
+                  key={room}
                   onClick={() => {
-                    if (user.uid === uid) return;
-
-                    setActiveChat(dmRoom);
+                    setActiveChat(room);
 
                     setUnreadCounts((prev) => ({
                       ...prev,
-                      [dmRoom]: 0,
+                      [room]: 0,
                     }));
                   }}
-                  className="flex items-center gap-2 p-2 rounded hover:bg-gray-800 cursor-pointer"
+                  className={`w-full flex items-center gap-2 p-2 rounded hover:bg-gray-800 ${
+                    activeChat === room ? "bg-gray-700" : ""
+                  }`}
                 >
                   <span
                     className={`w-2 h-2 rounded-full ${
@@ -280,16 +294,16 @@ export default function SlackCloneUI({
                     className="w-6 h-6 rounded-full bg-white"
                   />
 
-                  <span className="text-sm truncate flex-1">
+                  <span className="text-sm truncate flex-1 text-left">
                     {user.displayName}
                   </span>
 
-                  {unreadCounts[dmRoom] > 0 && (
+                  {unreadCounts[room] > 0 && (
                     <span className="bg-red-500 text-white text-xs rounded-full px-2">
-                      {unreadCounts[dmRoom]}
+                      {unreadCounts[room]}
                     </span>
                   )}
-                </div>
+                </button>
               );
             })}
           </div>
@@ -299,7 +313,7 @@ export default function SlackCloneUI({
       {/* Chat */}
       <main className="flex-1 flex flex-col min-h-0">
         <div className="h-12 bg-white border-b flex items-center px-4 font-medium">
-          #{" "}
+          {" "}
           {activeChat.startsWith("dm_") ? "Direct Message" : `# ${activeChat}`}
         </div>
 
@@ -311,14 +325,35 @@ export default function SlackCloneUI({
                 msg.uid === uid ? "justify-end" : "justify-start"
               }`}
             >
+              {/* OTHER USER AVATAR */}
               {msg.uid !== uid && (
-                <img
-                  src={msg.avatar}
-                  alt={msg.sender}
-                  className="w-10 h-10 rounded-full border bg-white"
-                />
+                <button
+                  onClick={() => {
+                    const dmRoom = `dm_${getDmRoom(uid, msg.uid)}`;
+
+                    setActiveChat(dmRoom);
+
+                    setUnreadCounts((prev) => ({
+                      ...prev,
+                      [dmRoom]: 0,
+                    }));
+
+                    setRecentDms((prev) => [
+                      dmRoom,
+                      ...prev.filter((room) => room !== dmRoom),
+                    ]);
+                  }}
+                  className="shrink-0"
+                >
+                  <img
+                    src={msg.avatar}
+                    alt={msg.sender}
+                    className="w-10 h-10 rounded-full border bg-white hover:ring-2 hover:ring-blue-400"
+                  />
+                </button>
               )}
 
+              {/* MESSAGE */}
               <div
                 className={`max-w-md px-3 py-2 rounded-lg text-sm ${
                   msg.uid === uid ? "bg-blue-500 text-white" : "bg-white border"
@@ -339,6 +374,7 @@ export default function SlackCloneUI({
                 <div>{msg.text}</div>
               </div>
 
+              {/* YOUR AVATAR */}
               {msg.uid === uid && (
                 <img
                   src={msg.avatar}
