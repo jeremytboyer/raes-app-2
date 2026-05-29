@@ -221,7 +221,7 @@ export default function SlackCloneUI({
     <div className="h-screen flex flex-col sm:flex-row bg-gray-100">
       {/* Sidebar */}
       <aside className="w-full sm:w-64 bg-gray-900 text-white flex flex-col p-3">
-        <div className="font-bold text-lg mb-4">Slack Clone</div>
+        <div className="font-bold text-lg mb-4">Rae's App</div>
 
         <div>
           <h2 className="text-xs uppercase text-gray-400 mb-2">Channels</h2>
