@@ -133,6 +133,10 @@ io.on("connection", (socket) => {
   const uid = socket.handshake.auth?.uid;
 
   if (uid) {
+    socket.join(uid);
+  }
+
+  if (uid) {
     User.findOneAndUpdate(
       { uid },
       {
@@ -185,10 +189,42 @@ io.on("connection", (socket) => {
 
       console.log("✅ Saved to Mongo");
 
-      io.to(room).emit("message", {
-        room,
-        msg: savedMessage,
-      });
+      if (room.startsWith("dm_")) {
+        const participants = room.replace("dm_", "").split("_");
+
+        participants.forEach((participantUid) => {
+          io.to(participantUid).emit("message", {
+            room,
+            msg: savedMessage,
+          });
+        });
+      } else {
+        if (room.startsWith("dm_")) {
+          const participants = room.replace("dm_", "").split("_");
+
+          participants.forEach((participantUid) => {
+            io.to(participantUid).emit("message", {
+              room,
+              msg: savedMessage,
+            });
+          });
+        } else {
+          if (room.startsWith("dm_")) {
+            const participants = room.replace("dm_", "").split("_");
+          
+            participants.forEach((participantUid) => {
+              io.to(participantUid).emit("message", {
+                room,
+                msg: savedMessage,
+              });
+            });
+          } else {
+            io.to(room).emit("message", {
+              room,
+              msg: savedMessage,
+            });
+          }
+      }
     } catch (err) {
       console.error("❌ MESSAGE ERROR");
       console.error(err);
