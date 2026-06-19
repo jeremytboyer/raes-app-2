@@ -71,11 +71,23 @@ export default function SlackCloneUI({
   const channels = ["general", "random", "build"];
 
   const addRecentDm = (room: string) => {
-    setRecentDms((prev) => [
-      room,
-      ...prev.filter((r) => r !== room),
-    ]);
+    setRecentDms((prev) => [room, ...prev.filter((r) => r !== room)]);
   };
+
+  useEffect(() => {
+    const fetchConversations = async () => {
+      try {
+        const res = await fetch(`${SOCKET_URL}/api/conversations/${uid}`);
+        const data = await res.json();
+
+        setRecentDms(data.map((conversation: any) => conversation.room));
+      } catch (err) {
+        console.error("Failed to fetch conversations", err);
+      }
+    };
+
+    fetchConversations();
+  }, [uid]);
 
   useEffect(() => {
     const s = io(SOCKET_URL, {

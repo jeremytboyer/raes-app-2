@@ -57,6 +57,15 @@ const UserSchema = new mongoose.Schema({
 
 const User = mongoose.model("User", UserSchema);
 
+const ConversationSchema = new mongoose.Schema({
+  room: String,
+  participants: [String],
+  lastMessage: String,
+  updatedAt: Number,
+});
+
+const Conversation = mongoose.model("Conversation", ConversationSchema);
+
 app.get("/", (req, res) => {
   res.send("🚀 Server running");
 });
@@ -75,6 +84,25 @@ app.get("/api/users", async (req, res) => {
 
     res.status(500).json({
       error: "Failed to fetch users",
+    });
+  }
+});
+
+app.get("/api/conversations/:uid", async (req, res) => {
+  try {
+    const { uid } = req.params;
+
+    const conversations = await Conversation.find({
+      participants: uid,
+    }).sort({ updatedAt: -1 });
+
+    res.json(conversations);
+  } catch (err) {
+    console.error("❌ GET CONVERSATIONS ERROR");
+    console.error(err);
+
+    res.status(500).json({
+      error: "Failed to fetch conversations",
     });
   }
 });
@@ -186,6 +214,21 @@ io.on("connection", (socket) => {
       const savedMessage = await Message.create(msg);
 
       console.log("✅ Saved to Mongo");
+
+      if (room.startsWith("dm_")) {
+        const participants = room.replace("dm_", "").split("_");
+
+        await Conversation.findOneAndUpdate(
+          { room },
+          {
+            room,
+            participants,
+            lastMessage: text,
+            updatedAt: Date.now(),
+          },
+          { upsert: true, new: true }
+        );
+      }
 
       if (room.startsWith("dm_")) {
         const participants = room.replace("dm_", "").split("_");
