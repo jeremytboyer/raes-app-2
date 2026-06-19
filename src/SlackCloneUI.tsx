@@ -70,6 +70,13 @@ export default function SlackCloneUI({
 
   const channels = ["general", "random", "build"];
 
+  const addRecentDm = (room: string) => {
+    setRecentDms((prev) => [
+      room,
+      ...prev.filter((r) => r !== room),
+    ]);
+  };
+
   useEffect(() => {
     const s = io(SOCKET_URL, {
       transports: ["websocket", "polling"],
@@ -134,7 +141,7 @@ export default function SlackCloneUI({
       }));
 
       if (room.startsWith("dm_")) {
-        setRecentDms((prev) => [room, ...prev.filter((r) => r !== room)]);
+        addRecentDm(room);
       }
 
       if (room !== activeChat && msg.uid !== uid) {
@@ -219,7 +226,6 @@ export default function SlackCloneUI({
 
   return (
     <div className="h-screen flex flex-col sm:flex-row bg-gray-100">
-      {/* Sidebar */}
       <aside className="w-full sm:w-64 bg-gray-900 text-white flex flex-col p-3">
         <div className="font-bold text-lg mb-4">Rae's App</div>
 
@@ -255,6 +261,12 @@ export default function SlackCloneUI({
           <h2 className="text-xs uppercase text-gray-400 mb-2">
             Direct Messages
           </h2>
+
+          {recentDms.length === 0 && (
+            <div className="text-xs text-gray-500 px-2">
+              No conversations yet
+            </div>
+          )}
 
           <div className="space-y-1">
             {recentDms.map((room) => {
@@ -310,10 +322,8 @@ export default function SlackCloneUI({
         </div>
       </aside>
 
-      {/* Chat */}
       <main className="flex-1 flex flex-col min-h-0">
         <div className="h-12 bg-white border-b flex items-center px-4 font-medium">
-          {" "}
           {activeChat.startsWith("dm_") ? "Direct Message" : `# ${activeChat}`}
         </div>
 
@@ -325,23 +335,18 @@ export default function SlackCloneUI({
                 msg.uid === uid ? "justify-end" : "justify-start"
               }`}
             >
-              {/* OTHER USER AVATAR */}
               {msg.uid !== uid && (
                 <button
                   onClick={() => {
                     const dmRoom = `dm_${getDmRoom(uid, msg.uid)}`;
 
                     setActiveChat(dmRoom);
+                    addRecentDm(dmRoom);
 
                     setUnreadCounts((prev) => ({
                       ...prev,
                       [dmRoom]: 0,
                     }));
-
-                    setRecentDms((prev) => [
-                      dmRoom,
-                      ...prev.filter((room) => room !== dmRoom),
-                    ]);
                   }}
                   className="shrink-0"
                 >
@@ -353,7 +358,6 @@ export default function SlackCloneUI({
                 </button>
               )}
 
-              {/* MESSAGE */}
               <div
                 className={`max-w-md px-3 py-2 rounded-lg text-sm ${
                   msg.uid === uid ? "bg-blue-500 text-white" : "bg-white border"
@@ -374,7 +378,6 @@ export default function SlackCloneUI({
                 <div>{msg.text}</div>
               </div>
 
-              {/* YOUR AVATAR */}
               {msg.uid === uid && (
                 <img
                   src={msg.avatar}
@@ -399,7 +402,11 @@ export default function SlackCloneUI({
             onChange={(e) => handleTyping(e.target.value)}
             onInput={(e) => handleTyping((e.target as HTMLInputElement).value)}
             onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-            placeholder={`Message #${activeChat}`}
+            placeholder={
+              activeChat.startsWith("dm_")
+                ? "Send a direct message"
+                : `Message #${activeChat}`
+            }
           />
 
           <button
