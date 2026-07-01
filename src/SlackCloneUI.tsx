@@ -4,11 +4,13 @@ import { io, Socket } from "socket.io-client";
 const SOCKET_URL = "https://raes-app.onrender.com";
 
 type Msg = {
+  _id?: string;
   sender: string;
   uid: string;
   avatar?: string;
   text: string;
   time?: number;
+  reactions?: Record<string, string[]>;
 };
 
 type UserProfile = {
@@ -236,6 +238,44 @@ export default function SlackCloneUI({
     }, 1000);
   };
 
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleReactionUpdated = ({
+      room,
+      messageId,
+      reactions,
+    }: {
+      room: string;
+      messageId: string;
+      reactions: Record<string, string[]>;
+    }) => {
+      setMessages((prev) => ({
+        ...prev,
+        [room]: (prev[room] || []).map((msg) =>
+          msg._id === messageId ? { ...msg, reactions } : msg
+        ),
+      }));
+    };
+
+    socket.on("reactionUpdated", handleReactionUpdated);
+
+    return () => {
+      socket.off("reactionUpdated", handleReactionUpdated);
+    };
+  }, [socket]);
+
+  const toggleReaction = (msg: Msg, emoji: string) => {
+    if (!socket || !msg._id) return;
+
+    socket.emit("reaction", {
+      messageId: msg._id,
+      room: activeChat,
+      emoji,
+      uid,
+    });
+  };
+
   return (
     <div className="h-screen flex flex-col sm:flex-row bg-gray-100">
       <aside className="w-full sm:w-64 bg-gray-900 text-white flex flex-col p-3">
@@ -388,6 +428,26 @@ export default function SlackCloneUI({
                 </div>
 
                 <div>{msg.text}</div>
+                <div className="flex gap-1 mt-2 flex-wrap">
+                  {["❤️", "🤗", "🕯️", "🙏"].map((emoji) => {
+                    const count = msg.reactions?.[emoji]?.length || 0;
+                    const reacted = msg.reactions?.[emoji]?.includes(uid);
+
+                    return (
+                      <button
+                        key={emoji}
+                        onClick={() => toggleReaction(msg, emoji)}
+                        className={`text-xs px-2 py-1 rounded-full border ${
+                          reacted
+                            ? "bg-blue-100 text-blue-700 border-blue-300"
+                            : "bg-white text-gray-600"
+                        }`}
+                      >
+                        {emoji} {count > 0 ? count : ""}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {msg.uid === uid && (

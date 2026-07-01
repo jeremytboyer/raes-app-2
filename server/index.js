@@ -38,6 +38,11 @@ const MessageSchema = new mongoose.Schema({
   avatar: String,
   text: String,
   time: Number,
+  reactions: {
+    type: Map,
+    of: [String],
+    default: {},
+  },
 });
 
 const Message = mongoose.model("Message", MessageSchema);
@@ -173,6 +178,35 @@ io.on("connection", (socket) => {
       console.log("🟢 User online:", uid);
     });
   }
+
+  socket.on("reaction", async ({ messageId, room, emoji, uid }) => {
+    try {
+      const message = await Message.findById(messageId);
+
+      if (!message) return;
+
+      const current = message.reactions?.get(emoji) || [];
+
+      const alreadyReacted = current.includes(uid);
+
+      const updatedUsers = alreadyReacted
+        ? current.filter((id) => id !== uid)
+        : [...current, uid];
+
+      message.reactions.set(emoji, updatedUsers);
+
+      await message.save();
+
+      io.to(room).emit("reactionUpdated", {
+        room,
+        messageId,
+        reactions: Object.fromEntries(message.reactions),
+      });
+    } catch (err) {
+      console.error("❌ REACTION ERROR");
+      console.error(err);
+    }
+  });
 
   socket.on("typing", ({ room, sender, uid }) => {
     socket.to(room).emit("typing", {
