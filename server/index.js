@@ -56,6 +56,10 @@ const UserSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  showEmail: {
+    type: Boolean,
+    default: false,
+  },
   lastSeen: Number,
   createdAt: Number,
 });
@@ -156,6 +160,28 @@ app.post("/api/users", async (req, res) => {
 
     res.status(500).json({
       error: "Failed to create user",
+    });
+  }
+});
+
+app.patch("/api/users/:uid/privacy", async (req, res) => {
+  try {
+    const { uid } = req.params;
+    const { showEmail } = req.body;
+
+    const user = await User.findOneAndUpdate(
+      { uid },
+      { showEmail },
+      { new: true }
+    );
+
+    res.json(user);
+  } catch (err) {
+    console.error("❌ PRIVACY UPDATE ERROR");
+    console.error(err);
+
+    res.status(500).json({
+      error: "Failed to update privacy settings",
     });
   }
 });
