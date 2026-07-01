@@ -181,12 +181,17 @@ io.on("connection", (socket) => {
 
   socket.on("reaction", async ({ messageId, room, emoji, uid }) => {
     try {
+      console.log("REACTION", messageId, emoji, uid);
+
       const message = await Message.findById(messageId);
 
       if (!message) return;
 
-      const current = message.reactions?.get(emoji) || [];
+      if (!message.reactions) {
+        message.reactions = new Map();
+      }
 
+      const current = message.reactions.get(emoji) || [];
       const alreadyReacted = current.includes(uid);
 
       const updatedUsers = alreadyReacted
@@ -197,11 +202,21 @@ io.on("connection", (socket) => {
 
       await message.save();
 
-      io.to(room).emit("reactionUpdated", {
+      const payload = {
         room,
         messageId,
         reactions: Object.fromEntries(message.reactions),
-      });
+      };
+
+      if (room.startsWith("dm_")) {
+        const participants = room.replace("dm_", "").split("_");
+
+        participants.forEach((participantUid) => {
+          io.to(participantUid).emit("reactionUpdated", payload);
+        });
+      } else {
+        io.to(room).emit("reactionUpdated", payload);
+      }
     } catch (err) {
       console.error("❌ REACTION ERROR");
       console.error(err);
