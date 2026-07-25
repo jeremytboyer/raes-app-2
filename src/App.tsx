@@ -11,6 +11,13 @@ import {
 
 import { auth } from "./firebase";
 
+const PROD_API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "https://raes-app.onrender.com";
+
+const API_BASE_URL = import.meta.env.DEV
+  ? "http://localhost:3001"
+  : PROD_API_BASE_URL;
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [username, setUsername] = useState("");
@@ -42,7 +49,7 @@ export default function App() {
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
 
-      await fetch("https://raes-app.onrender.com/api/users", {
+      await fetch(`${API_BASE_URL}/api/users`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

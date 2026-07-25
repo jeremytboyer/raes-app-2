@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: raes-app-api
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: https://raes-app.onrender.com
+
+  - type: static
+    name: raes-app-web
+    rootDir: .
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://raes-app-api.onrender.com

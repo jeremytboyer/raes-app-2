@@ -7,16 +7,29 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 
 const app = express();
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
-app.use(cors());
+const corsOrigin = allowedOrigins.length > 0 ? allowedOrigins : "*";
+
+app.use(
+  cors({
+    origin: corsOrigin,
+    methods: ["GET", "POST", "PATCH"],
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
+    origin: corsOrigin,
+    methods: ["GET", "POST", "PATCH"],
+    credentials: true,
   },
 });
 
@@ -77,6 +90,13 @@ const Conversation = mongoose.model("Conversation", ConversationSchema);
 
 app.get("/", (req, res) => {
   res.send("🚀 Server running");
+});
+
+app.get("/health", (req, res) => {
+  res.json({
+    ok: true,
+    dbState: mongoose.connection.readyState,
+  });
 });
 
 app.get("/api/users", async (req, res) => {
