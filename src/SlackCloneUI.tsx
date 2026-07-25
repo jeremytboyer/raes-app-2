@@ -1,7 +1,29 @@
 import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 
-const SOCKET_URL = "https://raes-app.onrender.com";
+const PROD_SOCKET_URL =
+  import.meta.env.VITE_API_BASE_URL || "https://raes-app.onrender.com";
+
+const SOCKET_URL = import.meta.env.DEV
+  ? "http://localhost:3001"
+  : PROD_SOCKET_URL;
+
+const CHANNELS = [
+  "🌿 Welcome",
+  "💙 Daily Check-In",
+  "🕯️ Remembering",
+  "👨‍👩‍👧 Loss of Parent",
+  "❤️ Loss of Partner",
+  "👶 Child Loss",
+  "🐾 Pet Loss",
+  "🌈 Hope & Healing",
+  "📚 Resources",
+] as const;
+
+type DeferredInstallPrompt = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+};
 
 type Msg = {
   _id?: string;
@@ -58,28 +80,45 @@ export default function SlackCloneUI({
   uid: string;
 }) {
   const [socket, setSocket] = useState<Socket | null>(null);
-  const [activeChat, setActiveChat] = useState("general");
+  const [activeChat, setActiveChat] = useState<string>(CHANNELS[0]);
   const [input, setInput] = useState("");
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [typingUser, setTypingUser] = useState<string | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [recentDms, setRecentDms] = useState<string[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const [isSelfProfileOpen, setIsSelfProfileOpen] = useState(false);
+  const [installPrompt, setInstallPrompt] =
+    useState<DeferredInstallPrompt | null>(null);
 
   const typingTimeoutRef = useRef<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  const [messages, setMessages] = useState<Record<string, Msg[]>>({
-    general: [],
-    random: [],
-    build: [],
-  });
+  const [messages, setMessages] = useState<Record<string, Msg[]>>(
+    Object.fromEntries(CHANNELS.map((channel) => [channel, []]))
+  );
 
-  const channels = ["general", "random", "build"];
+  const currentUserProfile = users.find((user) => user.uid === uid) || null;
 
   const addRecentDm = (room: string) => {
     setRecentDms((prev) => [room, ...prev.filter((r) => r !== room)]);
   };
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as DeferredInstallPrompt);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener(
+        "beforeinstallprompt",
+        handleBeforeInstallPrompt
+      );
+    };
+  }, []);
 
   useEffect(() => {
     const s = io(SOCKET_URL, {
@@ -297,15 +336,66 @@ export default function SlackCloneUI({
     }));
   };
 
+  const toggleEmailPrivacy = async () => {
+    if (!currentUserProfile) return;
+
+    const nextShowEmail = !currentUserProfile.showEmail;
+
+    try {
+      const res = await fetch(`${SOCKET_URL}/api/users/${uid}/privacy`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          showEmail: nextShowEmail,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to update privacy");
+      }
+
+      const updatedUser: UserProfile = await res.json();
+
+      setUsers((prev) =>
+        prev.map((user) => (user.uid === updatedUser.uid ? updatedUser : user))
+      );
+    } catch (err) {
+      console.error("Failed to update email privacy", err);
+    }
+  };
+
+  const handleInstallClick = async () => {
+    if (installPrompt) {
+      await installPrompt.prompt();
+      await installPrompt.userChoice;
+      setInstallPrompt(null);
+      return;
+    }
+
+    window.alert(
+      "To add Rae's App to your home screen, open your browser menu and choose 'Add to Home Screen'. On iPhone/iPad, use the Share button first."
+    );
+  };
+
   return (
     <div className="h-screen flex flex-col sm:flex-row bg-gray-100">
       <aside className="w-full sm:w-64 bg-gray-900 text-white flex flex-col p-3">
-        <div className="font-bold text-lg mb-4">Rae&apos;s App</div>
+        <div className="mb-4 flex items-center gap-2">
+          <div className="font-bold text-lg">Rae&apos;s App</div>
+          <button
+            onClick={handleInstallClick}
+            className="rounded-full border border-white/20 bg-white/10 px-2 py-0.5 text-xs font-medium text-white hover:bg-white/20"
+          >
+            Install
+          </button>
+        </div>
 
         <div>
           <h2 className="text-xs uppercase text-gray-400 mb-2">Channels</h2>
 
-          {channels.map((channel) => (
+          {CHANNELS.map((channel) => (
             <button
               key={channel}
               onClick={() => {
@@ -319,7 +409,7 @@ export default function SlackCloneUI({
                 activeChat === channel ? "bg-gray-700" : "hover:bg-gray-800"
               }`}
             >
-              <span># {channel}</span>
+              <span>{channel}</span>
 
               {unreadCounts[channel] > 0 && (
                 <span className="ml-auto bg-red-500 text-white text-xs rounded-full px-2">
@@ -401,7 +491,7 @@ export default function SlackCloneUI({
 
       <main className="flex-1 flex flex-col min-h-0">
         <div className="h-12 bg-white border-b flex items-center px-4 font-medium">
-          {activeChat.startsWith("dm_") ? "Direct Message" : `# ${activeChat}`}
+          {activeChat.startsWith("dm_") ? "Direct Message" : activeChat}
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-1">
@@ -490,11 +580,16 @@ export default function SlackCloneUI({
                   (isGrouped ? (
                     <div className="w-10 shrink-0" />
                   ) : (
-                    <img
-                      src={msg.avatar}
-                      alt={msg.sender}
-                      className="w-10 h-10 rounded-full border bg-white"
-                    />
+                    <button
+                      onClick={() => setIsSelfProfileOpen(true)}
+                      className="shrink-0"
+                    >
+                      <img
+                        src={msg.avatar}
+                        alt={msg.sender}
+                        className="w-10 h-10 rounded-full border bg-white hover:ring-2 hover:ring-blue-400"
+                      />
+                    </button>
                   ))}
               </div>
             );
@@ -519,7 +614,7 @@ export default function SlackCloneUI({
             placeholder={
               activeChat.startsWith("dm_")
                 ? "Send a direct message"
-                : `Message #${activeChat}`
+                : `Message ${activeChat}`
             }
           />
 
@@ -584,6 +679,58 @@ export default function SlackCloneUI({
                   Close
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isSelfProfileOpen && currentUserProfile && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg w-80 p-5">
+            <div className="flex flex-col items-center text-center">
+              <img
+                src={currentUserProfile.avatar}
+                alt={currentUserProfile.displayName}
+                className="w-20 h-20 rounded-full border mb-3"
+              />
+
+              <h2 className="text-xl font-bold">
+                {currentUserProfile.displayName}
+              </h2>
+
+              <p className="text-sm text-gray-500">{currentUserProfile.email}</p>
+
+              <div className="mt-3 flex items-center gap-2 text-sm">
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    currentUserProfile.online ? "bg-green-500" : "bg-gray-400"
+                  }`}
+                />
+
+                <span>
+                  {currentUserProfile.online ? "Online" : "Offline"}
+                </span>
+              </div>
+
+              {!currentUserProfile.online && currentUserProfile.lastSeen && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Last seen {formatTime(currentUserProfile.lastSeen)}
+                </p>
+              )}
+
+              <button
+                onClick={toggleEmailPrivacy}
+                className="mt-5 w-full rounded border px-4 py-2 text-sm"
+              >
+                {currentUserProfile.showEmail ? "Hide my email" : "Show my email"}
+              </button>
+
+              <button
+                onClick={() => setIsSelfProfileOpen(false)}
+                className="mt-2 w-full rounded bg-blue-500 px-4 py-2 text-sm text-white"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
