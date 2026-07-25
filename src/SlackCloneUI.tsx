@@ -86,6 +86,7 @@ export default function SlackCloneUI({
   const [typingUser, setTypingUser] = useState<string | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [recentDms, setRecentDms] = useState<string[]>([]);
+  const [areChannelsOpen, setAreChannelsOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [isSelfProfileOpen, setIsSelfProfileOpen] = useState(false);
   const [installPrompt, setInstallPrompt] =
@@ -412,32 +413,57 @@ export default function SlackCloneUI({
           </button>
         </div>
 
-        <div>
-          <h2 className="text-xs uppercase text-gray-400 mb-2">Channels</h2>
+        <div className="rounded-lg border border-white/10 bg-white/5">
+          <button
+            onClick={() => setAreChannelsOpen((prev) => !prev)}
+            className="flex w-full items-center justify-between px-3 py-2 text-left"
+          >
+            <div className="min-w-0">
+              <div className="text-[11px] uppercase tracking-wide text-gray-400">
+                Channels
+              </div>
+              <div className="truncate text-sm font-medium text-white">
+                {activeChannel?.label || activeChat}
+              </div>
+            </div>
 
-          {CHANNELS.map((channel) => (
-            <button
-              key={channel.id}
-              onClick={() => {
-                setActiveChat(channel.id);
-                setUnreadCounts((prev) => ({
-                  ...prev,
-                  [channel.id]: 0,
-                }));
-              }}
-              className={`w-full flex items-center justify-between text-left p-2 rounded text-sm ${
-                activeChat === channel.id ? "bg-gray-700" : "hover:bg-gray-800"
+            <span
+              className={`ml-3 text-sm text-gray-300 transition-transform ${
+                areChannelsOpen ? "rotate-90" : ""
               }`}
             >
-              <span>{channel.label}</span>
+              ▶
+            </span>
+          </button>
 
-              {unreadCounts[channel.id] > 0 && (
-                <span className="ml-auto bg-red-500 text-white text-xs rounded-full px-2">
-                  {unreadCounts[channel.id]}
-                </span>
-              )}
-            </button>
-          ))}
+          {areChannelsOpen && (
+            <div className="border-t border-white/10 px-2 py-2">
+              {CHANNELS.map((channel) => (
+                <button
+                  key={channel.id}
+                  onClick={() => {
+                    setActiveChat(channel.id);
+                    setUnreadCounts((prev) => ({
+                      ...prev,
+                      [channel.id]: 0,
+                    }));
+                    setAreChannelsOpen(false);
+                  }}
+                  className={`mb-1 flex w-full items-center justify-between rounded p-2 text-left text-sm last:mb-0 ${
+                    activeChat === channel.id ? "bg-gray-700" : "hover:bg-gray-800"
+                  }`}
+                >
+                  <span>{channel.label}</span>
+
+                  {unreadCounts[channel.id] > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-xs rounded-full px-2">
+                      {unreadCounts[channel.id]}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="mt-6">
