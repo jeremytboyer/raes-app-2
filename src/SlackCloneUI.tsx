@@ -9,15 +9,15 @@ const SOCKET_URL = import.meta.env.DEV
   : PROD_SOCKET_URL;
 
 const CHANNELS = [
-  "🌿 Welcome",
-  "💙 Daily Check-In",
-  "🕯️ Remembering",
-  "👨‍👩‍👧 Loss of Parent",
-  "❤️ Loss of Partner",
-  "👶 Child Loss",
-  "🐾 Pet Loss",
-  "🌈 Hope & Healing",
-  "📚 Resources",
+  { id: "general", label: "🌿 Welcome" },
+  { id: "random", label: "💙 Daily Check-In" },
+  { id: "build", label: "🕯️ Remembering" },
+  { id: "loss-of-parent", label: "👨‍👩‍👧 Loss of Parent" },
+  { id: "loss-of-partner", label: "❤️ Loss of Partner" },
+  { id: "child-loss", label: "👶 Child Loss" },
+  { id: "pet-loss", label: "🐾 Pet Loss" },
+  { id: "hope-and-healing", label: "🌈 Hope & Healing" },
+  { id: "resources", label: "📚 Resources" },
 ] as const;
 
 type DeferredInstallPrompt = Event & {
@@ -80,7 +80,7 @@ export default function SlackCloneUI({
   uid: string;
 }) {
   const [socket, setSocket] = useState<Socket | null>(null);
-  const [activeChat, setActiveChat] = useState<string>(CHANNELS[0]);
+  const [activeChat, setActiveChat] = useState<string>(CHANNELS[0].id);
   const [input, setInput] = useState("");
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [typingUser, setTypingUser] = useState<string | null>(null);
@@ -95,10 +95,11 @@ export default function SlackCloneUI({
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const [messages, setMessages] = useState<Record<string, Msg[]>>(
-    Object.fromEntries(CHANNELS.map((channel) => [channel, []]))
+    Object.fromEntries(CHANNELS.map((channel) => [channel.id, []]))
   );
 
   const currentUserProfile = users.find((user) => user.uid === uid) || null;
+  const activeChannel = CHANNELS.find((channel) => channel.id === activeChat);
 
   const addRecentDm = (room: string) => {
     setRecentDms((prev) => [room, ...prev.filter((r) => r !== room)]);
@@ -145,7 +146,17 @@ export default function SlackCloneUI({
     const fetchUsers = async () => {
       try {
         const res = await fetch(`${SOCKET_URL}/api/users`);
+
+        if (!res.ok) {
+          throw new Error(`Failed to fetch users: ${res.status}`);
+        }
+
         const data = await res.json();
+
+        if (!Array.isArray(data)) {
+          throw new Error("Users response was not an array");
+        }
+
         setUsers(data);
       } catch (err) {
         console.error("Failed to fetch users", err);
@@ -163,7 +174,16 @@ export default function SlackCloneUI({
     const fetchConversations = async () => {
       try {
         const res = await fetch(`${SOCKET_URL}/api/conversations/${uid}`);
+
+        if (!res.ok) {
+          throw new Error(`Failed to fetch conversations: ${res.status}`);
+        }
+
         const data = await res.json();
+
+        if (!Array.isArray(data)) {
+          throw new Error("Conversations response was not an array");
+        }
 
         setRecentDms(data.map((conversation: any) => conversation.room));
       } catch (err) {
@@ -397,23 +417,23 @@ export default function SlackCloneUI({
 
           {CHANNELS.map((channel) => (
             <button
-              key={channel}
+              key={channel.id}
               onClick={() => {
-                setActiveChat(channel);
+                setActiveChat(channel.id);
                 setUnreadCounts((prev) => ({
                   ...prev,
-                  [channel]: 0,
+                  [channel.id]: 0,
                 }));
               }}
               className={`w-full flex items-center justify-between text-left p-2 rounded text-sm ${
-                activeChat === channel ? "bg-gray-700" : "hover:bg-gray-800"
+                activeChat === channel.id ? "bg-gray-700" : "hover:bg-gray-800"
               }`}
             >
-              <span>{channel}</span>
+              <span>{channel.label}</span>
 
-              {unreadCounts[channel] > 0 && (
+              {unreadCounts[channel.id] > 0 && (
                 <span className="ml-auto bg-red-500 text-white text-xs rounded-full px-2">
-                  {unreadCounts[channel]}
+                  {unreadCounts[channel.id]}
                 </span>
               )}
             </button>
@@ -491,7 +511,9 @@ export default function SlackCloneUI({
 
       <main className="flex-1 flex flex-col min-h-0">
         <div className="h-12 bg-white border-b flex items-center px-4 font-medium">
-          {activeChat.startsWith("dm_") ? "Direct Message" : activeChat}
+          {activeChat.startsWith("dm_")
+            ? "Direct Message"
+            : activeChannel?.label || activeChat}
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-1">
@@ -614,7 +636,7 @@ export default function SlackCloneUI({
             placeholder={
               activeChat.startsWith("dm_")
                 ? "Send a direct message"
-                : `Message ${activeChat}`
+                : `Message ${activeChannel?.label || activeChat}`
             }
           />
 
